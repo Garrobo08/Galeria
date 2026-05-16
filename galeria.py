@@ -151,23 +151,35 @@ with tab_ver:
         )
         st.write("")
 
-        # Cuadrícula dinámica: 2 columnas en móvil (Streamlit lo escala automáticamente) o 4 en PC
-        # Línea nueva corregida:
-        columnas = st.columns([1, 1] if st.checkbox("Vista móvil (2 columnas)", value=True, key="grid_view") else [1, 1, 1, 1])
+        # Forzamos una cuadrícula de 3 columnas para que quepan varias en pantalla
+        columnas = st.columns(3)
         ext_fotos = ('.png', '.jpg', '.jpeg', '.webp')
         ext_videos = ('.mp4', '.mov', '.avi', '.mkv')
 
         for index, nombre_archivo in enumerate(archivos_existentes):
-            # Decide en qué columna colocar el archivo actual
-            col = columnas[index % len(columnas)]
+            col = columnas[index % 3]
             ruta_completa = os.path.join(ruta_album_actual, nombre_archivo)
             
             with col:
-                # Mostrar el archivo multimedia
+                # Usamos HTML/CSS personalizado para limitar la altura máxima de las imágenes/vídeos
+                # Esto evita que se vuelvan gigantes y permite ver el botón de descarga sin hacer scroll
                 if nombre_archivo.lower().endswith(ext_fotos):
+                    st.markdown(
+                        f"""
+                        <div style="display: flex; justify-content: center; align-items: center; background-color: #f0f2f6; border-radius: 12px; height: 200px; overflow: hidden; margin-bottom: 5px;">
+                            <img src="data:image/png;base64," style="max-height: 200px; max-width: 100%; object-fit: cover;" />
+                        </div>
+                        """, 
+                        unsafe_allow_html=True
+                    )
+                    # Mantenemos el st.image nativo pero con el tamaño controlado por el contenedor superior
                     st.image(ruta_completa, use_container_width=True)
+                    
                 elif nombre_archivo.lower().endswith(ext_videos):
+                    # Para los vídeos limitamos su contenedor vertical
                     st.video(ruta_completa)
+                
+                st.caption(f"📄 {nombre_archivo[:15]}...") # Cortamos nombres muy largos para no romper el diseño
                 
                 # Botones de acción compactos alineados en horizontal abajo del archivo
                 btn_col1, btn_col2 = st.columns(2)
@@ -184,7 +196,6 @@ with tab_ver:
                     if st.button("🗑️ Borrar", key=f"del_{index}"):
                         os.remove(ruta_completa)
                         st.rerun()
-
 # --- PESTAÑA 2: SUBIR ARCHIVOS ---
 with tab_subir:
     st.subheader("Añadir contenido")
