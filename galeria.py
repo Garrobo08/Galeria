@@ -3,26 +3,43 @@ import os
 import zipfile
 import json
 from io import BytesIO
+import secrets
 
-# Configuración de la página
-st.set_page_config(page_title="Galería Privada", page_icon="🔐", layout="wide")
-st.title("📸 Galería Multimedia Privada y Compartida")
+# Configuración de la página (Layout wide para que en PC aproveche el espacio)
+st.set_page_config(page_title="Galería Compartida", page_icon="📸", layout="wide")
 
-# --- CONFIGURACIÓN DE ARCHIVOS Y CARPETAS ---
+# --- ESTILOS CSS PARA HACERLO MÁS MODERNO Y MÓVIL-FRIENDLY ---
+st.markdown("""
+    <style>
+    /* Estilizar botones principales */
+    .stButton>button {
+        width: 100%;
+        border-radius: 10px;
+        height: 45px;
+    }
+    /* Hacer las tarjetas multimedia más limpias */
+    .stImage, .stVideo {
+        border-radius: 12px;
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.05);
+    }
+    /* Ajustar espacios en móvil */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 BASE_DIR = "galeria_privada"
-DATA_FILE = "usuarios_y_permisos.json"
+DATA_FILE = "albumes_links.json"
 
 if not os.path.exists(BASE_DIR):
     os.makedirs(BASE_DIR)
 
-# Inicializar base de datos simulada en JSON (Usuarios y Permisos)
+# Inicializar JSON para guardar los tokens de los enlaces
 if not os.path.exists(DATA_FILE):
-    datos_iniciales = {
-        "usuarios": {},  # "usuario": "contraseña"
-        "albumes_permisos": {}  # "nombre_album": {"creador": "user", "invitados": ["user2"]}
-    }
     with open(DATA_FILE, "w") as f:
-        json.dump(datos_iniciales, f)
+        json.dump({}, f)
 
 def cargar_datos():
     with open(DATA_FILE, "r") as f:
@@ -32,198 +49,157 @@ def guardar_datos(datos):
     with open(DATA_FILE, "w") as f:
         json.dump(datos, f, indent=4)
 
-datos_app = cargar_datos()
+datos_albumes = cargar_datos()
 
-# --- SISTEMA DE LOGIN / REGISTRO ---
-if "usuario_actual" not in st.session_state:
-    st.session_state.usuario_actual = None
+# --- CAPTURAR EL ENLACE DE INVITACIÓN ---
+# Si la URL tiene un parámetro (?token=xxxx), cargamos ese álbum directamente
+query_params = st.query_params
+token_actual = query_params.get("token", None)
 
-if st.session_state.usuario_actual is None:
-    st.subheader("🔑 Inicia sesión o Regístrate para acceder")
-    col1, col2 = st.columns(2)
+album_por_enlace = None
+if token_actual:
+    for alb, info in datos_albumes.items():
+        if info["token"] == token_actual:
+            album_por_enlace = alb
+            break
+
+# --- INTERFAZ PRINCIPAL ---
+st.title("📸 Galería Multimedia")
+
+# CASO 1: El usuario ha entrado a través de un enlace compartido
+if album_por_enlace:
+    st.info(f"📍 Estás viendo el álbum compartido: **{album_por_enlace}**")
+    ruta_album_actual = os.path.join(BASE_DIR, album_por_enlace)
+    album_seleccionado = album_por_enlace
+    es_creador = False
+
+# CASO 2: El usuario ha entrado a la raíz de la web (Panel de Gestión)
+else:
+    st.subheader("📁 Tus Álbumes")
     
-    with col1:
-        st.markdown("### Iniciar Sesión")
-        login_user = st.text_input("Usuario", key="login_u").strip().lower()
-        login_pass = st.text_input("Contraseña", type="password", key="login_p")
-        if st.button("Entrar"):
-            if login_user in datos_app["usuarios"] and datos_app["usuarios"][login_user] == login_pass:
-                st.session_state.usuario_actual = login_user
-                st.success(f"¡Bienvenido/a {login_user}!")
-                st.rerun()
+    # Usamos un menú desplegable colapsable para crear álbumes y no abrumar en el móvil
+    with st.expander("➕ Crear una nueva colección / álbum"):
+        nuevo_album = st.text_input("Nombre del álbum (ej: Viaje Egipto):").strip()
+        if st.button("Crear Álbum y Generar Enlace"):
+            if nuevo_album:
+                ruta_nuevo_album = os.path.join(BASE_DIR, nuevo_album)
+                if nuevo_album not in datos_albumes:
+                    os.makedirs(ruta_nuevo_album, exist_ok=True)
+                    
+                    # Generar un token único y secreto para este álbum
+                    token_unico = secrets.token_urlsafe(12)
+                    datos_albumes[nuevo_album] = {
+                        "token": token_unico
+                    }
+                    guardar_datos(datos_albumes)
+                    st.success(f"¡Álbum '{nuevo_album}' creado!")
+                    st.rerun()
+                else:
+                    st.warning("Ese álbum ya existe.")
             else:
-                st.error("Usuario o contraseña incorrectos.")
+                st.error("Introduce un nombre válido.")
+
+    # Listar álbumes creados en este PC
+    lista_albumes = list(datos_albumes.keys())
+    if not lista_albumes:
+        st.markdown("### 👋 ¡Bienvenido/a!")
+        st.info("Aún no tienes álbumes creados. Abre la pestaña de arriba para crear el primero.")
+        st.stop()
+        
+    album_seleccionado = st.selectbox("Selecciona un álbum para gestionar:", lista_albumes)
+    ruta_album_actual = os.path.join(BASE_DIR, album_seleccionado)
+    es_creador = True
+
+    # Mostrar enlace para compartir
+    token_alb = datos_albumes[album_seleccionado]["token"]
+    
+    # Intentar detectar la URL base automáticamente, si no usa localhost por defecto
+    url_base = "http://localhost:8501"
+    enlace_compartir = f"{url_base}/?token={token_alb}"
+    
+    st.markdown("### 🔗 Enlace para compartir")
+    st.code(enlace_compartir, language="text")
+    st.caption("Copia este enlace de arriba y envíaselo a tus amigos. Quien lo tenga podrá ver, subir y borrar archivos en este álbum sin necesidad de registrarse.")
+
+st.markdown("---")
+
+# --- PESTAÑAS (TABS): DISEÑO LIMPIO PARA MÓVIL ---
+# En vez de tener todo vertical, usamos pestañas para separar la visualización de la subida.
+tab_ver, tab_subir = st.tabs(["🖼️ Ver Colección", "📤 Subir Archivos"])
+
+# --- PESTAÑA 1: VER, DESCARGAR Y BORRAR ---
+with tab_ver:
+    if os.path.exists(ruta_album_actual):
+        archivos_existentes = [f for f in os.listdir(ruta_album_actual) if os.path.isfile(os.path.join(ruta_album_actual, f))]
+    else:
+        archivos_existentes = []
+
+    if not archivos_existentes:
+        st.info("Este álbum está vacío. Ve a la pestaña 'Subir Archivos' para añadir fotos o vídeos.")
+    else:
+        # Botón de descarga completa optimizado
+        buf = BytesIO()
+        with zipfile.ZipFile(buf, "x", zipfile.ZIP_DEFLATED) as zip_file:
+            for archivo in archivos_existentes:
+                zip_file.write(os.path.join(ruta_album_actual, archivo), arcname=archivo)
+        
+        st.download_button(
+            label="📥 Descargar Todo el Álbum (.ZIP)",
+            data=buf.getvalue(),
+            file_name=f"{album_seleccionado}.zip",
+            mime="application/zip"
+        )
+        st.write("")
+
+        # Cuadrícula dinámica: 2 columnas en móvil (Streamlit lo escala automáticamente) o 4 en PC
+        columnas = st.columns(2 if st.utils.platform.is_running_with_streamlit else 4)
+        ext_fotos = ('.png', '.jpg', '.jpeg', '.webp')
+        ext_videos = ('.mp4', '.mov', '.avi', '.mkv')
+
+        for index, nombre_archivo in enumerate(archivos_existentes):
+            # Decide en qué columna colocar el archivo actual
+            col = columnas[index % len(columnas)]
+            ruta_completa = os.path.join(ruta_album_actual, nombre_archivo)
+            
+            with col:
+                # Mostrar el archivo multimedia
+                if nombre_archivo.lower().endswith(ext_fotos):
+                    st.image(ruta_completa, use_container_width=True)
+                elif nombre_archivo.lower().endswith(ext_videos):
+                    st.video(ruta_completa)
                 
-    with col2:
-        st.markdown("### Crear Cuenta Nueva")
-        reg_user = st.text_input("Elige Usuario", key="reg_u").strip().lower()
-        reg_pass = st.text_input("Elige Contraseña", type="password", key="reg_p")
-        if st.button("Registrarse"):
-            if not reg_user or not reg_pass:
-                st.error("Por favor, rellena ambos campos.")
-            elif reg_user in datos_app["usuarios"]:
-                st.error("Este usuario ya existe.")
-            else:
-                datos_app["usuarios"][reg_user] = reg_pass
-                guardar_datos(datos_app)
-                st.success("¡Cuenta creada con éxito! Ya puedes iniciar sesión a la izquierda.")
-    st.stop()
+                # Botones de acción compactos alineados en horizontal abajo del archivo
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    with open(ruta_completa, "rb") as file:
+                        st.download_button(
+                            label="⬇️ Bajar",
+                            data=file,
+                            file_name=nombre_archivo,
+                            mime="application/octet-stream",
+                            key=f"dl_{index}"
+                        )
+                with btn_col2:
+                    if st.button("🗑️ Borrar", key=f"del_{index}"):
+                        os.remove(ruta_completa)
+                        st.rerun()
 
-# Si ya está logueado, mostramos la App
-usuario = st.session_state.usuario_actual
-st.sidebar.write(f"👤 Conectado como: **{usuario}**")
-if st.sidebar.button("Cerrar Sesión"):
-    st.session_state.usuario_actual = None
-    st.rerun()
+# --- PESTAÑA 2: SUBIR ARCHIVOS ---
+with tab_subir:
+    st.subheader("Añadir contenido")
+    archivos_subidos = st.file_uploader(
+        "Selecciona fotos o vídeos de tu carrete:", 
+        type=["png", "jpg", "jpeg", "webp", "mp4", "mov", "avi", "mkv"], 
+        accept_multiple_files=True
+    )
 
-st.sidebar.markdown("---")
-
-# --- FILTRAR ÁLBUMES PRIVADOS ---
-def obtener_albumes_visibles(user):
-    albumes = []
-    for alb, info in datos_app["albumes_permisos"].items():
-        if info["creador"] == user or user in info["invitados"]:
-            # Verificar que la carpeta físicamente exista
-            if os.path.exists(os.path.join(BASE_DIR, alb)):
-                albumes.append(alb)
-    return albumes
-
-# --- BARRA LATERAL: GESTIÓN DE ÁLBUMES ---
-st.sidebar.header("📁 Mis Álbumes")
-
-nuevo_album = st.sidebar.text_input("Crear nuevo álbum privado (ej: Egipto):").strip()
-if st.sidebar.button("Crear Álbum"):
-    if nuevo_album:
-        ruta_nuevo_album = os.path.join(BASE_DIR, nuevo_album)
-        if nuevo_album not in datos_app["albumes_permisos"]:
-            os.makedirs(ruta_nuevo_album, exist_ok=True)
-            # Registrar al creador del álbum
-            datos_app["albumes_permisos"][nuevo_album] = {
-                "creador": usuario,
-                "invitados": []
-            }
-            guardar_datos(datos_app)
-            st.sidebar.success(f"Álbum '{nuevo_album}' creado.")
+    if st.button("🚀 Guardar Archivos en el Álbum"):
+        if archivos_subidos:
+            for archivo in archivos_subidos:
+                ruta_archivo = os.path.join(ruta_album_actual, archivo.name)
+                with open(ruta_archivo, "wb") as f:
+                    f.write(archivo.getbuffer())
+            st.success("¡Archivos subidos correctamente!")
             st.rerun()
         else:
-            st.sidebar.warning("Ese álbum ya existe en el sistema.")
-    else:
-        st.sidebar.error("Introduce un nombre válido.")
-
-albumes_disponibles = obtener_albumes_visibles(usuario)
-
-if not albumes_disponibles:
-    st.info("No tienes álbumes disponibles. Crea uno en la barra lateral para empezar.")
-    st.stop()
-
-album_seleccionado = st.sidebar.selectbox("Selecciona un álbum:", albumes_disponibles)
-
-# --- PANEL DE INVITACIONES (Solo para el Creador) ---
-info_album = datos_app["albumes_permisos"][album_seleccionado]
-ruta_album_actual = os.path.join(BASE_DIR, album_seleccionado)
-
-st.header(f"📂 Álbum: {album_seleccionado}")
-
-if info_album["creador"] == usuario:
-    st.subheader("👥 Invitar amigos a este álbum")
-    col_inv1, col_inv2 = st.columns([3, 1])
-    with col_inv1:
-        usuario_a_invitar = st.text_input("Introduce el nombre de usuario de tu amigo:", key="inv").strip().lower()
-    with col_inv2:
-        st.write("") # Espacio para alinear el botón
-        st.write("")
-        if st.button("Dar Acceso"):
-            if usuario_a_invitar == usuario:
-                st.error("Tú ya eres el dueño de este álbum.")
-            elif usuario_a_invitar in datos_app["usuarios"]:
-                if usuario_a_invitar not in info_album["invitados"]:
-                    info_album["invitados"].append(usuario_a_invitar)
-                    guardar_datos(datos_app)
-                    st.success(f"¡{usuario_a_invitar} ahora puede ver este álbum!")
-                else:
-                    st.warning("Este usuario ya estaba invitado.")
-            else:
-                st.error("El usuario no existe. Dile que se registre primero en la web.")
-    
-    if info_album["invitados"]:
-        st.caption(f"Personas con acceso: {', '.join(info_album['invitados'])}")
-else:
-    st.caption(f"🌟 Álbum compartido contigo por: **{info_album['creador']}**")
-
-st.markdown("---")
-
-# --- SUBIR FOTOS Y VÍDEOS ---
-st.subheader("📤 Subir Fotos o Vídeos")
-archivos_subidos = st.file_uploader(
-    "Arrastra tus archivos multimedia", 
-    type=["png", "jpg", "jpeg", "webp", "mp4", "mov", "avi", "mkv"], 
-    accept_multiple_files=True
-)
-
-if st.button("Guardar Archivos"):
-    if archivos_subidos:
-        for archivo in archivos_subidos:
-            ruta_archivo = os.path.join(ruta_album_actual, archivo.name)
-            with open(ruta_archivo, "wb") as f:
-                f.write(archivo.getbuffer())
-        st.success(f"¡Archivos guardados en {album_seleccionado}!")
-        st.rerun()
-
-st.markdown("---")
-
-# --- VISUALIZACIÓN, DESCARGA Y ELIMINACIÓN ---
-st.subheader("🖼️ Contenido del álbum")
-archivos_existentes = [f for f in os.listdir(ruta_album_actual) if os.path.isfile(os.path.join(ruta_album_actual, f))]
-
-if not archivos_existentes:
-    st.info("Este álbum está vacío.")
-else:
-    # ZIP de descarga completa
-    buf = BytesIO()
-    with zipfile.ZipFile(buf, "x", zipfile.ZIP_DEFLATED) as zip_file:
-        for archivo in archivos_existentes:
-            zip_file.write(os.path.join(ruta_album_actual, archivo), arcname=archivo)
-    
-    st.download_button(
-        label="📥 Descargar Álbum Completo (.ZIP)",
-        data=buf.getvalue(),
-        file_name=f"{album_seleccionado}.zip",
-        mime="application/zip"
-    )
-    
-    # Cuadrícula multimedia
-    columnas = st.columns(3) # 3 columnas para que los vídeos quepan mejor
-    ext_fotos = ('.png', '.jpg', '.jpeg', '.webp')
-    ext_videos = ('.mp4', '.mov', '.avi', '.mkv')
-
-    for index, nombre_archivo in enumerate(archivos_existentes):
-        col = columnas[index % 3]
-        ruta_completa = os.path.join(ruta_album_actual, nombre_archivo)
-        
-        with col:
-            # Renderizar según sea foto o vídeo
-            if nombre_archivo.lower().endswith(ext_fotos):
-                st.image(ruta_completa, use_container_width=True)
-            elif nombre_archivo.lower().endswith(ext_videos):
-                st.video(ruta_completa)
-            
-            st.caption(nombre_archivo)
-            
-            # Botones debajo de cada archivo: Descargar y Eliminar
-            btn_col1, btn_col2 = st.columns(2)
-            with btn_col1:
-                with open(ruta_completa, "rb") as file:
-                    st.download_button(
-                        label="⬇️ Bajar",
-                        data=file,
-                        file_name=nombre_archivo,
-                        mime="application/octet-stream",
-                        key=f"dl_{index}"
-                    )
-            with btn_col2:
-                # Cualquiera con acceso puede descargar, pero decidimos si todos pueden borrar 
-                # (en este caso, permitimos que cualquiera que tenga acceso al álbum pueda limpiarlo)
-                if st.button("🗑️ Borrar", key=f"del_{index}"):
-                    os.remove(ruta_completa)
-                    st.success(f"Eliminado: {nombre_archivo}")
-                    st.rerun()
+            st.warning("No has seleccionado ningún archivo.")
