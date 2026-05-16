@@ -152,7 +152,8 @@ with tab_ver:
         st.write("")
 
         # Cuadrícula dinámica: 2 columnas en móvil (Streamlit lo escala automáticamente) o 4 en PC
-        columnas = st.columns(2 if st.utils.platform.is_running_with_streamlit else 4)
+        # Línea nueva corregida:
+        columnas = st.columns([1, 1] if st.checkbox("Vista móvil (2 columnas)", value=True, key="grid_view") else [1, 1, 1, 1])
         ext_fotos = ('.png', '.jpg', '.jpeg', '.webp')
         ext_videos = ('.mp4', '.mov', '.avi', '.mkv')
 
