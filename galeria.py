@@ -110,22 +110,34 @@ with tab_ver:
                 with btn_col2:
                     if st.button("🗑️", key=f"del_{index}"):
                         if not usuario_actual:
-                            # ¡CAMBIO AQUÍ! Alerta flotante horizontal
                             st.toast("⚠️ Escribe tu nombre arriba para borrar.", icon="⚠️")
                         elif usuario_actual == autor_foto or autor_foto == "desconocido":
                             os.remove(ruta_completa)
                             st.toast("✅ ¡Foto borrada correctamente!", icon="🗑️")
                             st.rerun()
                         else:
-                            # ¡CAMBIO AQUÍ! Alerta flotante horizontal que avisa de quién es
                             st.toast(f"❌ Esta foto es de {autor_foto.capitalize()}", icon="❌")
 
         st.markdown("---")
         st.subheader("🔍 Toca para ampliar una imagen")
+        
         opciones_ver = ["---"] + archivos
-        foto_ampliada = st.selectbox("Selecciona:", opciones_ver, format_func=lambda x: x.split("_")[-1] if "_" in x else x)
+        
+        # Le añadimos una KEY al selectbox para poder controlar su estado mediante código externo
+        foto_ampliada = st.selectbox(
+            "Selecciona:", 
+            opciones_ver, 
+            key="selector_ampliar",
+            format_func=lambda x: x.split("_")[-1] if "_" in x else x
+        )
         
         if foto_ampliada != "---":
+            # BOTÓN INTERACTIVO DE VOLVER ATRÁS
+            # Al pulsarlo, el estado del selector se limpia regresando a "---" y la página se actualiza
+            if st.button("⬅️ Volver a la galería web"):
+                st.session_state.selector_ampliar = "---"
+                st.rerun()
+                
             ruta_ampliada = os.path.join(CARPETA_EGIPTO, foto_ampliada)
             if foto_ampliada.lower().endswith(ext_fotos):
                 st.image(ruta_ampliada, use_container_width=True)
