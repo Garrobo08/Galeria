@@ -1,196 +1,119 @@
 import streamlit as st
 import os
-from PIL import Image
 import zipfile
 from io import BytesIO
 
-# Configuración de la página
+# Configuración de la página para ocultar menús innecesarios y optimizar espacio
 st.set_page_config(
-    page_title="Fotos de Nuestro Viaje a Egipto",
-    page_icon="🇪🇬",
-    layout="wide",  # Usar todo el ancho para la cuadrícula
-    initial_sidebar_state="collapsed" # Ocultar la barra lateral por defecto
+    page_title="Egipto 📸", 
+    page_icon="🇪🇬", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS personalizados para la cuadrícula y el visor
+# --- TRUCO CSS: CUADRÍCULA COMPACTA ESTILO GOOGLE FOTOS ---
 st.markdown("""
-<style>
-    .gallery-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); /* Cuadrícula adaptativa */
-        gap: 10px;
-        padding: 20px;
+    <style>
+    /* Forzar a que todas las imágenes sean cuadraditos perfectos de 110px (capan 3 por fila en móvil) */
+    [data-testid="stImage"] img {
+        height: 110px !important;
+        width: 110px !important;
+        object-fit: cover !important;
+        border-radius: 4px !important;
+        margin: 0 auto !important;
     }
-    .gallery-item {
-        width: 100%;
-        padding-top: 100%; /* Mantener aspecto cuadrado */
-        position: relative;
-        cursor: pointer;
-        border-radius: 8px;
-        overflow: hidden;
+    /* Estilizar vídeos para que mantengan el mismo tamaño cuadrado compacto */
+    [data-testid="stVideo"] video {
+        height: 110px !important;
+        width: 110px !important;
+        object-fit: cover !important;
+        border-radius: 4px !important;
     }
-    .gallery-item img {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover; /* Ajustar imagen al contenedor */
-        transition: transform 0.3s ease;
+    /* Reducir márgenes y espacios para que todo quede pegadito y limpio */
+    .block-container {
+        padding: 1rem !important;
     }
-    .gallery-item:hover img {
-        transform: scale(1.05); /* Efecto de zoom al pasar el ratón */
+    div[data-testid="stColumn"] {
+        padding: 0px !important;
+        margin: 0px !important;
+        text-align: center;
     }
-    /* Estilos para el visor a tamaño completo */
-    #image-viewer {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.9);
-        z-index: 999;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+    /* Hacer el botón de borrar súper discreto debajo de la foto */
+    .stButton>button {
+        padding: 2px !important;
+        height: 24px !important;
+        font-size: 11px !important;
+        margin-top: -5px !important;
     }
-    #viewer-image {
-        max-width: 90%;
-        max-height: 90%;
-    }
-    #viewer-controls {
-        position: absolute;
-        bottom: 20px;
-        display: flex;
-        gap: 10px;
-    }
-</style>
+    </style>
 """, unsafe_allow_html=True)
 
-# Directorio donde se guardan las fotos
-IMAGE_DIR = "fotos_viaje"
-if not os.path.exists(IMAGE_DIR):
-    os.makedirs(IMAGE_DIR)
+st.title("🇪🇬 Fotos Egipto")
 
-# Estado de la sesión para controlar el visor
-if 'viewer_image_path' not in st.session_state:
-    st.session_state['viewer_image_path'] = None
+CARPETA_EGIPTO = "fotos_egipto"
+if not os.path.exists(CARPETA_EGIPTO):
+    os.makedirs(CARPETA_EGIPTO)
 
-# Función para abrir el visor
-def open_viewer(image_path):
-    st.session_state['viewer_image_path'] = image_path
+# Pestañas para separar la vista de la subida de archivos
+tab_ver, tab_subir = st.tabs(["🖼️ Galería", "📤 Subir"])
 
-# Función para cerrar el visor
-def close_viewer():
-    st.session_state['viewer_image_path'] = None
-
-# Título y descripción
-st.title("🇪🇬 Nuestro Viaje a Egipto")
-st.write("¡Sube tus fotos y vídeos del viaje para compartirlos con todos!")
-
-# --- Sección de Visualización de la Galería (Cuadrícula Compacta) ---
-st.header("📸 Galería de Fotos")
-
-# Obtener lista de imágenes
-image_files = [f for f in os.listdir(IMAGE_DIR) if os.path.isfile(os.path.join(IMAGE_DIR, f))]
-
-if image_files:
-    # Contenedor de la cuadrícula
-    st.markdown('<div class="gallery-grid">', unsafe_allow_html=True)
-
-    for image_name in image_files:
-        image_path = os.path.join(IMAGE_DIR, image_name)
-        
-        # Generar miniatura en memoria
-        image = Image.open(image_path)
-        image.thumbnail((200, 200))  # Tamaño de la miniatura
-        thumbnail_buffer = BytesIO()
-        image.save(thumbnail_buffer, format=image.format)
-        thumbnail_base64 = thumbnail_buffer.getvalue()
-
-        # Item de la galería (miniatura clickable)
-        st.markdown(f"""
-            <div class="gallery-item" onclick="Streamlit.setComponentValue('viewer_image_path', '{image_path}')">
-                <img src="data:image/{image.format.lower()};base64,{thumbnail_base64.decode()}" alt="{image_name}">
-            </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True) # Cerrar contenedor de la cuadrícula
-
-else:
-    st.info("Aún no hay fotos en la galería. ¡Sube las tuyas!")
-
-# --- Visor a Tamaño Completo (Lógica de Streamlit) ---
-if st.session_state['viewer_image_path']:
-    viewer_image_path = st.session_state['viewer_image_path']
-    viewer_image_name = os.path.basename(viewer_image_path)
-
-    # Mostrar imagen a tamaño completo
-    image = Image.open(viewer_image_path)
-    st.image(image, caption=viewer_image_name, use_column_width=True)
-
-    # Controles del visor
-    col1, col2, col3 = st.columns([1, 1, 1])
-
-    with col1:
-        # Botón para descargar la foto individualmente
-        with open(viewer_image_path, "rb") as file:
-            st.download_button(
-                label="⬇️ Descargar Foto",
-                data=file,
-                file_name=viewer_image_name,
-                mime=f"image/{image.format.lower()}"
-            )
+# --- PESTAÑA 1: LA REVOLUCIÓN DE LA GALERÍA COMPACTA ---
+with tab_ver:
+    archivos = [f for f in os.listdir(CARPETA_EGIPTO) if os.path.isfile(os.path.join(CARPETA_EGIPTO, f))]
     
-    with col2:
-        # Botón para eliminar la foto
-        if st.button("🗑️ Eliminar Foto"):
-            os.remove(viewer_image_path)
-            close_viewer()
-            st.experimental_rerun()  # Recargar la página para actualizar la galería
+    if not archivos:
+        st.info("Aún no hay fotos.")
+    else:
+        # Botón para descargar todo el viaje en un ZIP
+        buf = BytesIO()
+        with zipfile.ZipFile(buf, "x", zipfile.ZIP_DEFLATED) as zip_file:
+            for archivo in archivos:
+                zip_file.write(os.path.join(CARPETA_EGIPTO, archivo), arcname=archivo)
+        
+        st.download_button(
+            label="📥 Descargar todo el viaje (.ZIP)",
+            data=buf.getvalue(),
+            file_name="viaje_egipto.zip",
+            mime="application/zip"
+        )
+        st.write("")
 
-    with col3:
-        # Botón para cerrar el visor
-        if st.button("❌ Cerrar"):
-            close_viewer()
+        # Creamos 3 columnas nativas. En móviles se mantendrán en filas de 3 gracias al CSS.
+        columnas = st.columns(3)
+        ext_fotos = ('.png', '.jpg', '.jpeg', '.webp', '.gif')
 
-# --- Sección para Subir Fotos y Vídeos ---
-st.header("📤 Subir Fotos y Vídeos")
-uploaded_files = st.file_uploader("Elige tus archivos", accept_multiple_files=True, type=['png', 'jpg', 'jpeg', 'mp4', 'mov'])
+        for index, nombre_archivo in enumerate(archivos):
+            col = columnas[index % 3]
+            ruta_completa = os.path.join(CARPETA_EGIPTO, nombre_archivo)
+            
+            with col:
+                # 1. Mostramos la miniatura (Foto o Vídeo)
+                if nombre_archivo.lower().endswith(ext_fotos):
+                    st.image(ruta_completa)
+                else:
+                    st.video(ruta_completa)
+                
+                # 2. Mini-botón para borrar la foto si se desea
+                if st.button("🗑️", key=f"del_{index}"):
+                    os.remove(ruta_completa)
+                    st.rerun() # Arreglado el error aquí usando la función moderna .rerun()
 
-if uploaded_files:
-    for uploaded_file in uploaded_files:
-        # Guardar el archivo en el directorio
-        with open(os.path.join(IMAGE_DIR, uploaded_file.name), "wb") as f:
-            f.write(uploaded_file.getbuffer())
-    st.success("¡Archivos subidos correctamente!")
-    st.experimental_rerun()  # Recargar la página para mostrar las nuevas fotos
-
-# --- Sección para Descargar Todo el Viaje ---
-st.header("⬇️ Descargar Todo el Viaje")
-
-# Función para crear el archivo ZIP
-def create_zip():
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-        for image_name in image_files:
-            image_path = os.path.join(IMAGE_DIR, image_name)
-            zip_file.write(image_path, image_name)
-    return zip_buffer.getvalue()
-
-if image_files:
-    st.download_button(
-        label="🎁 Descargar Todo el Viaje (.ZIP)",
-        data=create_zip(),
-        file_name="viaje_egipto.zip",
-        mime="application/zip"
+# --- PESTAÑA 2: SECCIÓN DE SUBIDA ---
+with tab_subir:
+    st.subheader("📤 Sube tus fotos del carrete")
+    archivos_subidos = st.file_uploader(
+        "Puedes seleccionar varias a la vez:", 
+        type=["png", "jpg", "jpeg", "webp", "mp4", "mov"], 
+        accept_multiple_files=True
     )
-else:
-    st.warning("No hay fotos para descargar.")
 
-# Capturar el valor del componente personalizado para abrir el visor
-viewer_image_path_value = st.experimental_get_query_params().get('viewer_image_path')
-if viewer_image_path_value:
-    open_viewer(viewer_image_path_value[0])
-    st.experimental_set_query_params() # Limpiar parámetros de consulta
+    if st.button("🚀 Guardar fotos"):
+        if archivos_subidos:
+            for archivo in archivos_subidos:
+                ruta_archivo = os.path.join(CARPETA_EGIPTO, archivo.name)
+                with open(ruta_archivo, "wb") as f:
+                    f.write(archivo.getbuffer())
+            st.success("¡Subidas correctamente!")
+            st.rerun() # Arreglado el error aquí también
+        else:
+            st.warning("Selecciona archivos primero.")
