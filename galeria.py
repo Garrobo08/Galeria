@@ -52,7 +52,7 @@ CARPETA_EGIPTO = "fotos_egipto"
 if not os.path.exists(CARPETA_EGIPTO):
     os.makedirs(CARPETA_EGIPTO)
 
-tab_ver, tab_subir = st.tabs(["🖼️ Ver Galería", "📤 Subir Contenido"])
+tab_ver, tab_subir = st.tabs(["🖼️ Ver Galería Web", "📤 Subir Contenido"])
 
 # --- PESTAÑA 1: VER Y BORRAR CON CONTROL ---
 with tab_ver:
@@ -141,7 +141,7 @@ with tab_subir:
         accept_multiple_files=True
     )
 
-    if st.button("🚀 Guardar en la Galería"):
+    if st.button("🚀 Guardar en la Galería Web"):
         if not creador:
             st.error("⚠️ Por favor, pon tu nombre antes de subir los archivos para que el sistema sepa que son tuyos.")
         elif archivos_subidos:
