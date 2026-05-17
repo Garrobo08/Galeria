@@ -1,31 +1,70 @@
 import streamlit as st
 import os
 import zipfile
+import base64
 from io import BytesIO
 
-# Configuración de la página optimizada para móvil y PC
+# Configuración de la página
 st.set_page_config(page_title="Fotos Egipto 📸", page_icon="🇪🇬", layout="wide")
 
-# --- ESTILOS CSS PARA CONTROLAR EL TAMÁÑO DE LAS FOTOS (TIPO INSTAGRAM) ---
+# --- DISEÑO RESPONSIVO CON CSS GRID (2 COLUMNAS EN MÓVIL, 4 EN PC) ---
 st.markdown("""
     <style>
-    /* Forzar a que todas las imágenes de la cuadrícula tengan un tamaño fijo y no sean gigantes */
-    [data-testid="stImage"] img {
-        height: 220px !important;
-        object-fit: cover !important;
-        border-radius: 12px !important;
+    /* Creamos una cuadrícula que se adapta sola al tamaño de la pantalla */
+    .galeria-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr); /* Por defecto: 2 columnas (Móvil) */
+        gap: 12px;
+        padding: 10px 0;
+    }
+    
+    /* Si la pantalla es grande (Ordenador), cambiamos automáticamente a 4 columnas */
+    @media (min-width: 768px) {
+        .galeria-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+    
+    /* Estilo para cada tarjeta de foto/vídeo */
+    .tarjeta-media {
+        background-color: #f8f9fa;
+        border-radius: 12px;
+        padding: 8px;
+        box-shadow: 0px 2px 6px rgba(0,0,0,0.05);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    /* Forzar tamaño fijo y recorte tipo Instagram en las imágenes del Grid HTML */
+    .tarjeta-media img, .tarjeta-media video {
+        height: 160px !important;
         width: 100% !important;
+        object-fit: cover !important;
+        border-radius: 8px !important;
     }
-    /* Estilizar los vídeos para que no ocupen toda la pantalla */
-    [data-testid="stVideo"] {
-        height: 220px !important;
-        border-radius: 12px !important;
-        overflow: hidden;
+    
+    /* Ajustar tamaño en PC para que luzcan un poco más grandes */
+    @media (min-width: 768px) {
+        .tarjeta-media img, .tarjeta-media video {
+            height: 200px !important;
+        }
     }
-    /* Estilizar botones para que sean cómodos en el móvil */
+    
+    /* Hacer los botones más compactos para que quepan en horizontal en el móvil */
+    .botón-contenedor {
+        display: flex;
+        gap: 6px;
+        width: 100%;
+        margin-top: 8px;
+    }
+    
     .stButton>button {
-        border-radius: 8px;
-        margin-top: 5px;
+        width: 100% !important;
+        padding: 4px 8px !important;
+        height: 35px !important;
+        font-size: 13px !important;
+        border-radius: 6px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -43,7 +82,10 @@ tab_ver, tab_subir = st.tabs(["🖼️ Ver Galería", "📤 Subir Fotos y Vídeo
 
 # --- PESTAÑA 1: VISUALIZACIÓN Y DESCARGAS ---
 with tab_ver:
-    archivos = [f for f in os.listdir(CARPETA_EGIPTO) if os.path.isfile(os.path.join(CARPETA_EGIPTO, f))]
+    if os.path.exists(CARPETA_EGIPTO):
+        archivos = [f for f in os.listdir(CARPETA_EGIPTO) if os.path.isfile(os.path.join(CARPETA_EGIPTO, f))]
+    else:
+        archivos = []
     
     if not archivos:
         st.info("La galería aún está vacía. ¡Sé el primero en subir un recuerdo en la otra pestaña!")
@@ -62,44 +104,52 @@ with tab_ver:
         )
         st.write("")
 
-        # Cuadrícula dinámica: 3 columnas que se adaptan solas
-        columnas = st.columns(3)
+        # --- AQUÍ EMPIEZA EL GRID RESPONSIVO ---
+        # Abrimos el contenedor de la galería
+        grid_html = '<div class="galeria-grid">'
+        st.markdown(grid_html, unsafe_allow_html=True)
+        
         ext_fotos = ('.png', '.jpg', '.jpeg', '.webp')
         ext_videos = ('.mp4', '.mov', '.avi', '.mkv')
 
         for index, nombre_archivo in enumerate(archivos):
-            col = columnas[index % 3]
             ruta_completa = os.path.join(CARPETA_EGIPTO, nombre_archivo)
             
-            with col:
-                # Mostrar archivo (el CSS de arriba controla que midan 220px de alto)
+            # Para renderizar las imágenes dentro de nuestro CSS Grid propio, 
+            # necesitamos codificarlas en base64 para que el navegador las lea directamente.
+            try:
+                with open(ruta_completa, "rb") as image_file:
+                    encoded_string = base64.b64encode(image_file.read()).decode()
+                
+                # Crear la tarjeta para cada elemento
+                st.markdown('<div class="tarjeta-media">', unsafe_allow_html=True)
+                
                 if nombre_archivo.lower().endswith(ext_fotos):
-                    st.image(ruta_completa, use_container_width=True)
+                    st.markdown(f'<img src="data:image/jpeg;base64,{encoded_string}">', unsafe_allow_html=True)
                 elif nombre_archivo.lower().endswith(ext_videos):
-                    st.video(ruta_completa)
+                    st.markdown(f'<video controls><source src="data:video/mp4;base64,{encoded_string}" type="video/mp4"></video>', unsafe_allow_html=True)
                 
-                # Nombre del archivo cortito
-                st.caption(f"📄 {nombre_archivo[:18]}...")
+                st.caption(f"📄 {nombre_archivo[:12]}...")
                 
-                # Botones de acción debajo de cada foto
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
+                # Renderizamos los botones nativos de Streamlit de forma compacta
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
                     with open(ruta_completa, "rb") as file:
-                        st.download_button(
-                            label="⬇️ Bajar",
-                            data=file,
-                            file_name=nombre_archivo,
-                            mime="application/octet-stream",
-                            key=f"dl_{index}"
-                        )
-                with btn_col2:
+                        st.download_button(label="⬇️ Bajar", data=file, file_name=nombre_archivo, mime="application/octet-stream", key=f"dl_{index}")
+                with col_btn2:
                     if st.button("🗑️ Borrar", key=f"del_{index}"):
                         os.remove(ruta_completa)
                         st.rerun()
+                
+                st.markdown('</div>', unsafe_allow_html=True) # Cierra tarjeta-media
+            except Exception as e:
+                pass
+                
+        st.markdown('</div>', unsafe_allow_html=True) # Cierra galeria-grid
 
 # --- PESTAÑA 2: SUBIR CONTENIDO ---
 with tab_subir:
-    st.subheader("📤 Añade tus recuerdos")
+    st.subheader("Añade tus recuerdos")
     archivos_subidos = st.file_uploader(
         "Selecciona fotos o vídeos desde tu móvil u ordenador:", 
         type=["png", "jpg", "jpeg", "webp", "mp4", "mov", "avi", "mkv"], 
