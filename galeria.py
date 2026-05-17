@@ -52,6 +52,10 @@ CARPETA_EGIPTO = "fotos_egipto"
 if not os.path.exists(CARPETA_EGIPTO):
     os.makedirs(CARPETA_EGIPTO)
 
+# Inicializar un contador de reinicios en el estado de la sesión si no existe
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
 tab_ver, tab_subir = st.tabs(["🖼️ Ver Galería Web", "📤 Subir Contenido"])
 
 # --- PESTAÑA 1: VER Y BORRAR CON CONTROL ---
@@ -94,7 +98,6 @@ with tab_ver:
                 st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Detectar el autor leyendo el nombre del archivo
-                # El formato es "autor_nombreoriginal.jpg"
                 if "_" in nombre_archivo:
                     autor_foto = nombre_archivo.split("_")[0].lower()
                 else:
@@ -117,7 +120,6 @@ with tab_ver:
 
         st.markdown("---")
         st.subheader("🔍 Toca para ampliar una imagen")
-        # Mostrar nombres limpios en el selector (quitando el "autor_")
         opciones_ver = ["---"] + archivos
         foto_ampliada = st.selectbox("Selecciona:", opciones_ver, format_func=lambda x: x.split("_")[-1] if "_" in x else x)
         
@@ -128,17 +130,18 @@ with tab_ver:
             else:
                 st.video(ruta_ampliada)
 
-# --- PESTAÑA 2: SUBIR CON NOMBRE ---
+# --- PESTAÑA 2: SUBIR CON REINICIO DE CONTENEDOR ---
 with tab_subir:
     st.subheader("Añade tus recuerdos")
     
-    # Campo obligatorio para saber de quién es la foto antes de subir
     creador = st.text_input("✍️ Tu Nombre (Obligatorio para saber que es tuya):").strip().lower()
     
+    # Le asignamos una clave dinámica que cambia cada vez que guardamos con éxito
     archivos_subidos = st.file_uploader(
         "Selecciona fotos o vídeos:", 
         type=["png", "jpg", "jpeg", "webp", "mp4", "mov"], 
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key=f"uploader_{st.session_state.uploader_key}"
     )
 
     if st.button("🚀 Guardar en la Galería Web"):
@@ -146,11 +149,14 @@ with tab_subir:
             st.error("⚠️ Por favor, pon tu nombre antes de subir los archivos para que el sistema sepa que son tuyos.")
         elif archivos_subidos:
             for archivo in archivos_subidos:
-                # Guardamos el archivo renombrándolo a: "nombre_archivofoto.jpg"
                 nombre_seguro = f"{creador}_{archivo.name}"
                 ruta_archivo = os.path.join(CARPETA_EGIPTO, nombre_seguro)
                 with open(ruta_archivo, "wb") as f:
                     f.write(archivo.getbuffer())
+            
+            # ¡EL TRUCO! Cambiamos el número de la clave para obligar a Streamlit a vaciar el uploader
+            st.session_state.uploader_key += 1
+            
             st.success("¡Archivos guardados!")
             st.rerun()
         else:
