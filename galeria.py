@@ -43,6 +43,14 @@ st.markdown("""
         font-size: 12px !important;
         width: 100% !important;
     }
+    /* Estilo especial para el botón de volver atrás para que destaque en el móvil */
+    .boton-volver>button {
+        height: 40px !important;
+        font-size: 16px !important;
+        background-color: #f0f2f6 !important;
+        font-weight: bold !important;
+        margin-bottom: 15px !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -52,9 +60,11 @@ CARPETA_EGIPTO = "fotos_egipto"
 if not os.path.exists(CARPETA_EGIPTO):
     os.makedirs(CARPETA_EGIPTO)
 
-# Inicializar un contador de reinicios en el estado de la sesión si no existe
+# Inicializar estados de la sesión
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
+if "foto_seleccionada" not in st.session_state:
+    st.session_state.foto_seleccionada = None
 
 tab_ver, tab_subir = st.tabs(["🖼️ Ver Galería Web", "📤 Subir Contenido"])
 
@@ -64,6 +74,27 @@ with tab_ver:
     
     if not archivos:
         st.info("La galería está vacía. ¡Sube fotos en la pestaña de al lado!")
+    
+    # MODO 1: ALGUIEN HA TOCADO UNA FOTO (VISTA PANTALLA COMPLETA)
+    elif st.session_state.foto_seleccionada is not None:
+        foto_grande = st.session_state.foto_seleccionada
+        ruta_ampliada = os.path.join(CARPETA_EGIPTO, foto_grande)
+        ext_fotos = ('.png', '.jpg', '.jpeg', '.webp', '.gif')
+        
+        # Botón de retroceso arriba del todo
+        st.markdown('<div class="boton-volver">', unsafe_allow_html=True)
+        if st.button("⬅️ Volver a la galería"):
+            st.session_state.foto_seleccionada = None
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Mostrar el archivo multimedia gigante
+        if foto_grande.lower().endswith(ext_fotos):
+            st.image(ruta_ampliada, use_container_width=True)
+        else:
+            st.video(ruta_ampliada)
+            
+    # MODO 2: VISTA NORMAL DE LA CUADRÍCULA DE 3 COLUMNAS
     else:
         # Descarga completa en ZIP
         buf = BytesIO()
@@ -79,7 +110,7 @@ with tab_ver:
         )
         st.write("")
 
-        # Input global para saber quién está navegando (y permitirle borrar lo suyo)
+        # Input global para el borrado
         usuario_actual = st.text_input("👤 Tu Nombre (Para poder borrar tus fotos):", key="user_global").strip().lower()
 
         columnas = st.columns(3)
@@ -90,6 +121,7 @@ with tab_ver:
             ruta_completa = os.path.join(CARPETA_EGIPTO, nombre_archivo)
             
             with col:
+                # El truco: Ponemos un botón transparente/invisible encima o usamos un botón nativo para expandir
                 st.markdown('<div class="miniatura-galeria">', unsafe_allow_html=True)
                 if nombre_archivo.lower().endswith(ext_fotos):
                     st.image(ruta_completa)
@@ -103,11 +135,16 @@ with tab_ver:
                 else:
                     autor_foto = "desconocido"
                 
-                btn_col1, btn_col2 = st.columns(2)
+                # Añadimos un tercer botón intermedio con una lupa "🔍" para activar el modo pantalla completa al pulsar
+                btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 1])
                 with btn_col1:
                     with open(ruta_completa, "rb") as file:
                         st.download_button(label="⬇️", data=file, file_name=nombre_archivo, mime="application/octet-stream", key=f"dl_{index}")
                 with btn_col2:
+                    if st.button("🔍", key=f"zoom_{index}"):
+                        st.session_state.foto_seleccionada = nombre_archivo
+                        st.rerun()
+                with btn_col3:
                     if st.button("🗑️", key=f"del_{index}"):
                         if not usuario_actual:
                             st.toast("⚠️ Escribe tu nombre arriba para borrar.", icon="⚠️")
@@ -117,32 +154,6 @@ with tab_ver:
                             st.rerun()
                         else:
                             st.toast(f"❌ Esta foto es de {autor_foto.capitalize()}", icon="❌")
-
-        st.markdown("---")
-        st.subheader("🔍 Toca para ampliar una imagen")
-        
-        opciones_ver = ["---"] + archivos
-        
-        # Le añadimos una KEY al selectbox para poder controlar su estado mediante código externo
-        foto_ampliada = st.selectbox(
-            "Selecciona:", 
-            opciones_ver, 
-            key="selector_ampliar",
-            format_func=lambda x: x.split("_")[-1] if "_" in x else x
-        )
-        
-        if foto_ampliada != "---":
-            # BOTÓN INTERACTIVO DE VOLVER ATRÁS
-            # Al pulsarlo, el estado del selector se limpia regresando a "---" y la página se actualiza
-            if st.button("⬅️ Volver a la galería web"):
-                st.session_state.selector_ampliar = "---"
-                st.rerun()
-                
-            ruta_ampliada = os.path.join(CARPETA_EGIPTO, foto_ampliada)
-            if foto_ampliada.lower().endswith(ext_fotos):
-                st.image(ruta_ampliada, use_container_width=True)
-            else:
-                st.video(ruta_ampliada)
 
 # --- PESTAÑA 2: SUBIR CONTENIDO ---
 with tab_subir:
