@@ -11,10 +11,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- CSS CORREGIDO PARA MÓVIL (COLUMNAS JUNTAS PERO ERRORES LEGIBLES) ---
+# --- CSS PARA MANTENER LAS 3 COLUMNAS EN MÓVIL ---
 st.markdown("""
     <style>
-    /* Mantenemos las 3 columnas juntas en el móvil */
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
@@ -22,8 +21,6 @@ st.markdown("""
         justify-content: flex-start !important;
         gap: 8px !important;
     }
-    
-    /* Cada columna multimedia ocupa su tercio correspondiente */
     [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
         width: calc(33.33% - 6px) !important;
         flex: 1 1 calc(33.33% - 6px) !important;
@@ -31,27 +28,15 @@ st.markdown("""
         padding: 0px !important;
         margin: 0px !important;
     }
-
-    /* ¡EL ARREGLO! Evitamos que los bloques de alerta (error, success, info) se rompan en columnas */
-    [data-testid="stNotification"], [data-testid="stAlert"], .stAlert {
-        width: 100% !important;
-        flex: 1 1 100% !important;
-        min-width: 100% !important;
-        display: block !important;
-    }
-
-    /* Las miniaturas siguen siendo cuadrados perfectos estilo Google Fotos */
     .miniatura-galeria img, .miniatura-galeria video {
         height: 110px !important;
         width: 100% !important;
         object-fit: cover !important;
         border-radius: 6px !important;
     }
-
     .block-container {
         padding: 1rem !important;
     }
-    
     .stButton>button {
         padding: 2px !important;
         height: 28px !important;
@@ -73,7 +58,7 @@ if "uploader_key" not in st.session_state:
 
 tab_ver, tab_subir = st.tabs(["🖼️ Ver Galería Web", "📤 Subir Contenido"])
 
-# --- PESTAÑA 1: VER Y BORRAR CON CONTROL ---
+# --- PESTAÑA 1: VER Y BORRAR ---
 with tab_ver:
     archivos = [f for f in os.listdir(CARPETA_EGIPTO) if os.path.isfile(os.path.join(CARPETA_EGIPTO, f))]
     
@@ -125,13 +110,15 @@ with tab_ver:
                 with btn_col2:
                     if st.button("🗑️", key=f"del_{index}"):
                         if not usuario_actual:
-                            st.error("⚠️ Escribe tu nombre arriba para borrar.")
+                            # ¡CAMBIO AQUÍ! Alerta flotante horizontal
+                            st.toast("⚠️ Escribe tu nombre arriba para borrar.", icon="⚠️")
                         elif usuario_actual == autor_foto or autor_foto == "desconocido":
                             os.remove(ruta_completa)
-                            st.success("¡Borrada!")
+                            st.toast("✅ ¡Foto borrada correctamente!", icon="🗑️")
                             st.rerun()
                         else:
-                            st.error(f"❌ Esta foto es de {autor_foto.capitalize()}")
+                            # ¡CAMBIO AQUÍ! Alerta flotante horizontal que avisa de quién es
+                            st.toast(f"❌ Esta foto es de {autor_foto.capitalize()}", icon="❌")
 
         st.markdown("---")
         st.subheader("🔍 Toca para ampliar una imagen")
@@ -145,13 +132,12 @@ with tab_ver:
             else:
                 st.video(ruta_ampliada)
 
-# --- PESTAÑA 2: SUBIR CON REINICIO DE CONTENEDOR ---
+# --- PESTAÑA 2: SUBIR CONTENIDO ---
 with tab_subir:
     st.subheader("Añade tus recuerdos")
     
     creador = st.text_input("✍️ Tu Nombre (Obligatorio para saber que es tuya):").strip().lower()
     
-    # Le asignamos una clave dinámica que cambia cada vez que guardamos con éxito
     archivos_subidos = st.file_uploader(
         "Selecciona fotos o vídeos:", 
         type=["png", "jpg", "jpeg", "webp", "mp4", "mov"], 
@@ -161,7 +147,7 @@ with tab_subir:
 
     if st.button("🚀 Guardar en la Galería Web"):
         if not creador:
-            st.error("⚠️ Por favor, pon tu nombre antes de subir los archivos para que el sistema sepa que son tuyos.")
+            st.error("⚠️ Por favor, pon tu nombre antes de subir.")
         elif archivos_subidos:
             for archivo in archivos_subidos:
                 nombre_seguro = f"{creador}_{archivo.name}"
@@ -169,9 +155,7 @@ with tab_subir:
                 with open(ruta_archivo, "wb") as f:
                     f.write(archivo.getbuffer())
             
-            # ¡EL TRUCO! Cambiamos el número de la clave para obligar a Streamlit a vaciar el uploader
             st.session_state.uploader_key += 1
-            
             st.success("¡Archivos guardados!")
             st.rerun()
         else:
