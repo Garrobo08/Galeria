@@ -56,9 +56,33 @@ st.markdown("""
 
 st.title("🇪🇬 Nuestro Viaje a Egipto")
 
-CARPETA_EGIPTO = "fotos_egipto"
-if not os.path.exists(CARPETA_EGIPTO):
-    os.makedirs(CARPETA_EGIPTO)
+# Base de la galería
+CARPETA_BASE = "fotos_egipto"
+
+# Diccionario de categorías con sus nombres de carpeta correspondientes
+CATEGORIAS = {
+    "Raquel": "fotos_raquel",
+    "Paco": "fotos_paco",
+    "Roberto": "fotos_roberto",
+    "Lourdes": "fotos_lourdes",
+    "Isabel": "fotos_isabel",
+    "Arturo": "fotos_arturo",
+    "Begoña": "fotos_begona",
+    "Javala": "fotos_javala",
+    "Rubén": "fotos_ruben",
+    "Caste": "fotos_caste",
+    "Monumentos": "fotos_monumentos",
+    "Grupos": "fotos_grupos"
+}
+
+# Inicializar carpetas físicas en el servidor
+if not os.path.exists(CARPETA_BASE):
+    os.makedirs(CARPETA_BASE)
+
+for carpeta in CATEGORIAS.values():
+    ruta_subcarpeta = os.path.join(CARPETA_BASE, carpeta)
+    if not os.path.exists(ruta_subcarpeta):
+        os.makedirs(ruta_subcarpeta)
 
 # Inicializar estados de la sesión
 if "uploader_key" not in st.session_state:
@@ -70,25 +94,32 @@ tab_ver, tab_subir = st.tabs(["🖼️ Ver Galería Web", "📤 Subir Contenido"
 
 # --- PESTAÑA 1: VER Y BORRAR ---
 with tab_ver:
-    archivos = [f for f in os.listdir(CARPETA_EGIPTO) if os.path.isfile(os.path.join(CARPETA_EGIPTO, f))]
+    # Selector de categoría para filtrar la vista de la galería
+    categoria_vista = st.selectbox(
+        "📁 Selecciona la carpeta que quieres ver:", 
+        list(CATEGORIAS.keys()),
+        key="selector_categoria_vista"
+    )
+    
+    # Definir la ruta física de la subcarpeta seleccionada
+    carpeta_actual = os.path.join(CARPETA_BASE, CATEGORIAS[categoria_vista])
+    archivos = [f for f in os.listdir(carpeta_actual) if os.path.isfile(os.path.join(carpeta_actual, f))]
     
     if not archivos:
-        st.info("La galería está vacía. ¡Sube fotos en la pestaña de al lado!")
+        st.info(f"La carpeta '{categoria_vista}' está vacía actualmente.")
     
-    # MODO 1: ALGUIEN HA TOCADO UNA FOTO (VISTA PANTALLA COMPLETA)
+    # MODO 1: VISTA PANTALLA COMPLETA
     elif st.session_state.foto_seleccionada is not None:
         foto_grande = st.session_state.foto_seleccionada
-        ruta_ampliada = os.path.join(CARPETA_EGIPTO, foto_grande)
+        ruta_ampliada = os.path.join(carpeta_actual, foto_grande)
         ext_fotos = ('.png', '.jpg', '.jpeg', '.webp', '.gif')
         
-        # Botón de retroceso arriba del todo
         st.markdown('<div class="boton-volver">', unsafe_allow_html=True)
         if st.button("⬅️ Volver a la galería"):
             st.session_state.foto_seleccionada = None
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Mostrar el archivo multimedia gigante
         if foto_grande.lower().endswith(ext_fotos):
             st.image(ruta_ampliada, use_container_width=True)
         else:
@@ -96,21 +127,20 @@ with tab_ver:
             
     # MODO 2: VISTA NORMAL DE LA CUADRÍCULA DE 3 COLUMNAS
     else:
-        # Descarga completa en ZIP
+        # Descarga en ZIP de la carpeta específica que se está viendo
         buf = BytesIO()
         with zipfile.ZipFile(buf, "x", zipfile.ZIP_DEFLATED) as zip_file:
             for archivo in archivos:
-                zip_file.write(os.path.join(CARPETA_EGIPTO, archivo), arcname=archivo)
+                zip_file.write(os.path.join(carpeta_actual, archivo), arcname=archivo)
         
         st.download_button(
-            label="📥 Descargar Todo el Viaje (.ZIP)",
+            label=f"📥 Descargar Carpeta {categoria_vista} (.ZIP)",
             data=buf.getvalue(),
-            file_name="viaje_egipto.zip",
+            file_name=f"egipto_{CATEGORIAS[categoria_vista]}.zip",
             mime="application/zip"
         )
         st.write("")
 
-        # Input global para el borrado
         usuario_actual = st.text_input("👤 Tu Nombre (Para poder borrar tus fotos):", key="user_global").strip().lower()
 
         columnas = st.columns(3)
@@ -118,10 +148,9 @@ with tab_ver:
 
         for index, nombre_archivo in enumerate(archivos):
             col = columnas[index % 3]
-            ruta_completa = os.path.join(CARPETA_EGIPTO, nombre_archivo)
+            ruta_completa = os.path.join(carpeta_actual, nombre_archivo)
             
             with col:
-                # El truco: Ponemos un botón transparente/invisible encima o usamos un botón nativo para expandir
                 st.markdown('<div class="miniatura-galeria">', unsafe_allow_html=True)
                 if nombre_archivo.lower().endswith(ext_fotos):
                     st.image(ruta_completa)
@@ -129,13 +158,11 @@ with tab_ver:
                     st.video(ruta_completa)
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Detectar el autor leyendo el nombre del archivo
                 if "_" in nombre_archivo:
                     autor_foto = nombre_archivo.split("_")[0].lower()
                 else:
                     autor_foto = "desconocido"
                 
-                # Añadimos un tercer botón intermedio con una lupa "🔍" para activar el modo pantalla completa al pulsar
                 btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 1])
                 with btn_col1:
                     with open(ruta_completa, "rb") as file:
@@ -155,11 +182,18 @@ with tab_ver:
                         else:
                             st.toast(f"❌ Esta foto es de {autor_foto.capitalize()}", icon="❌")
 
-# --- PESTAÑA 2: SUBIR CONTENIDO ---
+# --- PESTAÑA 2: SUBIR CONTENIDO A CARPETA ESPECÍFICA ---
 with tab_subir:
     st.subheader("Añade tus recuerdos")
     
     creador = st.text_input("✍️ Tu Nombre (Obligatorio para saber que es tuya):").strip().lower()
+    
+    # Desplegable para que el usuario elija el destino de los archivos cargados
+    categoria_destino = st.selectbox(
+        "📂 ¿A qué carpeta quieres subir estas fotos/vídeos?", 
+        list(CATEGORIAS.keys()),
+        key="selector_categoria_subir"
+    )
     
     archivos_subidos = st.file_uploader(
         "Selecciona fotos o vídeos:", 
@@ -172,14 +206,17 @@ with tab_subir:
         if not creador:
             st.error("⚠️ Por favor, pon tu nombre antes de subir.")
         elif archivos_subidos:
+            # Ruta de destino según la categoría seleccionada al subir
+            carpeta_destino_final = os.path.join(CARPETA_BASE, CATEGORIAS[categoria_destino])
+            
             for archivo in archivos_subidos:
                 nombre_seguro = f"{creador}_{archivo.name}"
-                ruta_archivo = os.path.join(CARPETA_EGIPTO, nombre_seguro)
+                ruta_archivo = os.path.join(carpeta_destino_final, nombre_seguro)
                 with open(ruta_archivo, "wb") as f:
                     f.write(archivo.getbuffer())
             
             st.session_state.uploader_key += 1
-            st.success("¡Archivos guardados!")
+            st.success(f"¡Archivos guardados en la carpeta de {categoria_destino}!")
             st.rerun()
         else:
             st.warning("Selecciona primero algún archivo.")
