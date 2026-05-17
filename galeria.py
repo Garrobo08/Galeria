@@ -11,10 +11,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- CSS DEFINITIVO PARA MÓVIL Y ORDENADOR ---
+# --- CSS PARA MANTENER LAS 3 COLUMNAS EN MÓVIL ---
 st.markdown("""
     <style>
-    /* TRUCO MAESTRO: Obliga a Streamlit a mantener las 3 columnas juntas en el móvil y no saltar de línea */
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
@@ -22,8 +21,6 @@ st.markdown("""
         justify-content: flex-start !important;
         gap: 8px !important;
     }
-    
-    /* Cada columna ocupará un tercio del espacio restando el hueco */
     [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
         width: calc(33.33% - 6px) !important;
         flex: 1 1 calc(33.33% - 6px) !important;
@@ -31,21 +28,15 @@ st.markdown("""
         padding: 0px !important;
         margin: 0px !important;
     }
-
-    /* Las miniaturas de la galería serán cuadrados perfectos estilo Google Fotos */
     .miniatura-galeria img, .miniatura-galeria video {
         height: 110px !important;
         width: 100% !important;
         object-fit: cover !important;
         border-radius: 6px !important;
     }
-
-    /* Reducir los espacios globales para que todo se vea más recogido */
     .block-container {
         padding: 1rem !important;
     }
-    
-    /* Estilo para los botones pequeños debajo de las fotos */
     .stButton>button {
         padding: 2px !important;
         height: 28px !important;
@@ -61,17 +52,16 @@ CARPETA_EGIPTO = "fotos_egipto"
 if not os.path.exists(CARPETA_EGIPTO):
     os.makedirs(CARPETA_EGIPTO)
 
-# Pestañas limpias para móvil
 tab_ver, tab_subir = st.tabs(["🖼️ Ver Galería", "📤 Subir Contenido"])
 
-# --- PESTAÑA 1: REPOSITORIO DE FOTOS ---
+# --- PESTAÑA 1: VER Y BORRAR CON CONTROL ---
 with tab_ver:
     archivos = [f for f in os.listdir(CARPETA_EGIPTO) if os.path.isfile(os.path.join(CARPETA_EGIPTO, f))]
     
     if not archivos:
         st.info("La galería está vacía. ¡Sube fotos en la pestaña de al lado!")
     else:
-        # Botón para descargar todo el paquete ZIP
+        # Descarga completa en ZIP
         buf = BytesIO()
         with zipfile.ZipFile(buf, "x", zipfile.ZIP_DEFLATED) as zip_file:
             for archivo in archivos:
@@ -85,7 +75,9 @@ with tab_ver:
         )
         st.write("")
 
-        # Creamos una fila de 3 columnas fijas
+        # Input global para saber quién está navegando (y permitirle borrar lo suyo)
+        usuario_actual = st.text_input("👤 Tu Nombre (Para poder borrar tus fotos):", key="user_global").strip().lower()
+
         columnas = st.columns(3)
         ext_fotos = ('.png', '.jpg', '.jpeg', '.webp', '.gif')
 
@@ -94,7 +86,6 @@ with tab_ver:
             ruta_completa = os.path.join(CARPETA_EGIPTO, nombre_archivo)
             
             with col:
-                # Envolvemos en un contenedor personalizado para aplicar el tamaño de miniatura cuadrado
                 st.markdown('<div class="miniatura-galeria">', unsafe_allow_html=True)
                 if nombre_archivo.lower().endswith(ext_fotos):
                     st.image(ruta_completa)
@@ -102,47 +93,62 @@ with tab_ver:
                     st.video(ruta_completa)
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Botones de acción compactos
+                # Detectar el autor leyendo el nombre del archivo
+                # El formato es "autor_nombreoriginal.jpg"
+                if "_" in nombre_archivo:
+                    autor_foto = nombre_archivo.split("_")[0].lower()
+                else:
+                    autor_foto = "desconocido"
+                
                 btn_col1, btn_col2 = st.columns(2)
                 with btn_col1:
                     with open(ruta_completa, "rb") as file:
-                        st.download_button(
-                            label="⬇️", 
-                            data=file, 
-                            file_name=nombre_archivo, 
-                            mime="application/octet-stream", 
-                            key=f"dl_{index}"
-                        )
+                        st.download_button(label="⬇️", data=file, file_name=nombre_archivo, mime="application/octet-stream", key=f"dl_{index}")
                 with btn_col2:
                     if st.button("🗑️", key=f"del_{index}"):
-                        os.remove(ruta_completa)
-                        st.rerun()
+                        if not usuario_actual:
+                            st.error("⚠️ Escribe tu nombre arriba para borrar.")
+                        elif usuario_actual == autor_foto or autor_foto == "desconocido":
+                            os.remove(ruta_completa)
+                            st.success("¡Borrada!")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Esta foto es de {autor_foto.capitalize()}")
 
         st.markdown("---")
-        # --- SECCIÓN EXTRA: VER EN GRANDE ---
         st.subheader("🔍 Toca para ampliar una imagen")
-        foto_ampliada = st.selectbox("Selecciona qué foto quieres ver a tamaño completo:", ["---"] + archivos)
+        # Mostrar nombres limpios en el selector (quitando el "autor_")
+        opciones_ver = ["---"] + archivos
+        foto_ampliada = st.selectbox("Selecciona:", opciones_ver, format_func=lambda x: x.split("_")[-1] if "_" in x else x)
+        
         if foto_ampliada != "---":
             ruta_ampliada = os.path.join(CARPETA_EGIPTO, foto_ampliada)
-            # Aquí la mostramos con el componente normal sin aplicar las restricciones de miniatura
             if foto_ampliada.lower().endswith(ext_fotos):
                 st.image(ruta_ampliada, use_container_width=True)
             else:
                 st.video(ruta_ampliada)
 
-# --- PESTAÑA 2: SUBIR CONTENIDO ---
+# --- PESTAÑA 2: SUBIR CON NOMBRE ---
 with tab_subir:
     st.subheader("Añade tus recuerdos")
+    
+    # Campo obligatorio para saber de quién es la foto antes de subir
+    creador = st.text_input("✍️ Tu Nombre (Obligatorio para saber que es tuya):").strip().lower()
+    
     archivos_subidos = st.file_uploader(
-        "Selecciona fotos o vídeos desde tu móvil:", 
+        "Selecciona fotos o vídeos:", 
         type=["png", "jpg", "jpeg", "webp", "mp4", "mov"], 
         accept_multiple_files=True
     )
 
     if st.button("🚀 Guardar en la Galería"):
-        if archivos_subidos:
+        if not creador:
+            st.error("⚠️ Por favor, pon tu nombre antes de subir los archivos para que el sistema sepa que son tuyos.")
+        elif archivos_subidos:
             for archivo in archivos_subidos:
-                ruta_archivo = os.path.join(CARPETA_EGIPTO, archivo.name)
+                # Guardamos el archivo renombrándolo a: "nombre_archivofoto.jpg"
+                nombre_seguro = f"{creador}_{archivo.name}"
+                ruta_archivo = os.path.join(CARPETA_EGIPTO, nombre_seguro)
                 with open(ruta_archivo, "wb") as f:
                     f.write(archivo.getbuffer())
             st.success("¡Archivos guardados!")
