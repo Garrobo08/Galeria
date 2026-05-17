@@ -11,9 +11,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- CSS PARA MANTENER LAS 3 COLUMNAS EN MÓVIL ---
+# --- CSS CORREGIDO PARA MÓVIL (COLUMNAS JUNTAS PERO ERRORES LEGIBLES) ---
 st.markdown("""
     <style>
+    /* Mantenemos las 3 columnas juntas en el móvil */
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
@@ -21,6 +22,8 @@ st.markdown("""
         justify-content: flex-start !important;
         gap: 8px !important;
     }
+    
+    /* Cada columna multimedia ocupa su tercio correspondiente */
     [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
         width: calc(33.33% - 6px) !important;
         flex: 1 1 calc(33.33% - 6px) !important;
@@ -28,15 +31,27 @@ st.markdown("""
         padding: 0px !important;
         margin: 0px !important;
     }
+
+    /* ¡EL ARREGLO! Evitamos que los bloques de alerta (error, success, info) se rompan en columnas */
+    [data-testid="stNotification"], [data-testid="stAlert"], .stAlert {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+        display: block !important;
+    }
+
+    /* Las miniaturas siguen siendo cuadrados perfectos estilo Google Fotos */
     .miniatura-galeria img, .miniatura-galeria video {
         height: 110px !important;
         width: 100% !important;
         object-fit: cover !important;
         border-radius: 6px !important;
     }
+
     .block-container {
         padding: 1rem !important;
     }
+    
     .stButton>button {
         padding: 2px !important;
         height: 28px !important;
