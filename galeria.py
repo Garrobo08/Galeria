@@ -23,6 +23,7 @@ def guardar_password(carpeta, password):
 # --- ESTADOS ---
 if "nivel" not in st.session_state: st.session_state.nivel = None
 if "acceso_carpeta" not in st.session_state: st.session_state.acceso_carpeta = None
+if "uploader_key" not in st.session_state: st.session_state.uploader_key = 0
 
 def verificar_acceso():
     if st.session_state.nivel is None:
@@ -69,7 +70,6 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
         if sel_cat != "Selecciona una carpeta...":
             pw_input = st.text_input(f"Contraseña para {sel_cat}:", type="password", key=f"pw_{tab_name}")
             
-            # Botón de acceso explícito
             if st.button(f"Acceder a {sel_cat}", key=f"btn_acc_{tab_name}"):
                 passwords = cargar_passwords()
                 if pw_input == passwords.get(sel_cat):
@@ -78,7 +78,6 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
                     st.error("Contraseña incorrecta.")
                     st.session_state.acceso_carpeta = None
             
-            # Solo muestra el contenido si la carpeta está validada
             if st.session_state.acceso_carpeta == sel_cat:
                 ruta_cat = os.path.join(CARPETA_BASE, sel_cat)
                 if i == 0: # VER
@@ -91,11 +90,14 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
                                 st.download_button("⬇️", file, f, key=f"dl_{tab_name}_{idx}")
                 else: # SUBIR
                     creador = st.text_input("Tu nombre:", key="autor_input")
-                    files = st.file_uploader("Fotos:", accept_multiple_files=True, key="uploader_files")
+                    files = st.file_uploader("Fotos:", accept_multiple_files=True, key=f"up_{st.session_state.uploader_key}")
+                    
                     if st.button("Confirmar subida"):
                         if creador and files:
                             for f in files:
                                 with open(os.path.join(ruta_cat, f"{creador}_{f.name}"), "wb") as dest:
                                     dest.write(f.getbuffer())
                             st.success("Subido con éxito.")
+                            # Incrementar la key fuerza al uploader y al input a limpiarse
+                            st.session_state.uploader_key += 1
                             st.rerun()
