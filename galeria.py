@@ -9,7 +9,6 @@ PASS_ADMIN = "AdminVillarrubia2026"
 
 if not os.path.exists(CARPETA_BASE): os.makedirs(CARPETA_BASE)
 
-# Funciones de persistencia de contraseñas
 def cargar_passwords():
     if not os.path.exists(ARCHIVO_PW): return {}
     with open(ARCHIVO_PW, "r") as f:
@@ -23,6 +22,7 @@ def guardar_password(carpeta, password):
 
 # --- ESTADOS ---
 if "nivel" not in st.session_state: st.session_state.nivel = None
+if "acceso_carpeta" not in st.session_state: st.session_state.acceso_carpeta = None
 
 def verificar_acceso():
     if st.session_state.nivel is None:
@@ -53,7 +53,7 @@ if st.session_state.nivel == 'admin':
                 os.makedirs(os.path.join(CARPETA_BASE, nueva_cat), exist_ok=True)
                 guardar_password(nueva_cat, new_pw)
                 st.success(f"Carpeta '{nueva_cat}' creada.")
-                st.rerun() # Limpia inputs
+                st.rerun()
 
         carpeta_borrar = st.selectbox("Borrar carpeta:", ["Selecciona una carpeta..."] + os.listdir(CARPETA_BASE))
         if carpeta_borrar != "Selecciona una carpeta..." and st.button("BORRAR"):
@@ -68,9 +68,18 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
         
         if sel_cat != "Selecciona una carpeta...":
             pw_input = st.text_input(f"Contraseña para {sel_cat}:", type="password", key=f"pw_{tab_name}")
-            passwords = cargar_passwords()
             
-            if pw_input == passwords.get(sel_cat):
+            # Botón de acceso explícito
+            if st.button(f"Acceder a {sel_cat}", key=f"btn_acc_{tab_name}"):
+                passwords = cargar_passwords()
+                if pw_input == passwords.get(sel_cat):
+                    st.session_state.acceso_carpeta = sel_cat
+                else:
+                    st.error("Contraseña incorrecta.")
+                    st.session_state.acceso_carpeta = None
+            
+            # Solo muestra el contenido si la carpeta está validada
+            if st.session_state.acceso_carpeta == sel_cat:
                 ruta_cat = os.path.join(CARPETA_BASE, sel_cat)
                 if i == 0: # VER
                     archivos = [f for f in os.listdir(ruta_cat) if not f.startswith('.')]
@@ -79,7 +88,7 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
                         with cols[idx % 3]:
                             st.image(os.path.join(ruta_cat, f), use_container_width=True)
                             with open(os.path.join(ruta_cat, f), "rb") as file:
-                                st.download_button("⬇️", file, f, key=f"dl_{idx}")
+                                st.download_button("⬇️", file, f, key=f"dl_{tab_name}_{idx}")
                 else: # SUBIR
                     creador = st.text_input("Tu nombre:", key="autor_input")
                     files = st.file_uploader("Fotos:", accept_multiple_files=True, key="uploader_files")
@@ -90,5 +99,3 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
                                     dest.write(f.getbuffer())
                             st.success("Subido con éxito.")
                             st.rerun()
-            elif pw_input: # Solo muestra error si escribió algo y es incorrecto
-                st.error("Contraseña incorrecta.")
