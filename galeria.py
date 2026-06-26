@@ -26,6 +26,8 @@ if "acceso_carpeta" not in st.session_state: st.session_state.acceso_carpeta = N
 if "reset_admin" not in st.session_state: st.session_state.reset_admin = 0
 if "uploader_key" not in st.session_state: st.session_state.uploader_key = 0
 if "reset_pass" not in st.session_state: st.session_state.reset_pass = 0
+# Estado para rastrear la última selección y forzar el reinicio
+if "ultima_cat" not in st.session_state: st.session_state.ultima_cat = None
 
 def verificar_acceso():
     if st.session_state.nivel is None:
@@ -70,12 +72,14 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
         cats = ["Selecciona una carpeta..."] + [d for d in os.listdir(CARPETA_BASE) if os.path.isdir(os.path.join(CARPETA_BASE, d))]
         sel_cat = st.selectbox(f"Elige evento:", cats, key=f"sel_{tab_name}")
         
+        # SI CAMBIA LA CATEGORÍA O EL MÓDULO, RESETEAMOS EL ACCESO
+        identificador_actual = f"{tab_name}_{sel_cat}"
+        if st.session_state.ultima_cat != identificador_actual:
+            st.session_state.acceso_carpeta = None
+            st.session_state.ultima_cat = identificador_actual
+        
         if sel_cat != "Selecciona una carpeta...":
-            # Si cambiamos de carpeta, reseteamos el acceso
-            if st.session_state.acceso_carpeta != sel_cat:
-                st.session_state.acceso_carpeta = None
-            
-            # Solo mostramos el input de contraseña si no hemos accedido a esta carpeta
+            # Si aún no tenemos acceso, mostramos el input
             if st.session_state.acceso_carpeta != sel_cat:
                 pw_input = st.text_input(f"Contraseña para {sel_cat}:", type="password", key=f"pw_{tab_name}_{st.session_state.reset_pass}")
                 if st.button(f"Acceder a {sel_cat}", key=f"btn_acc_{tab_name}"):
@@ -89,9 +93,7 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
             
             # --- CONTENIDO PROTEGIDO ---
             if st.session_state.acceso_carpeta == sel_cat:
-                st.success(f"✅ Acceso concedido a {sel_cat}")
                 ruta_cat = os.path.join(CARPETA_BASE, sel_cat)
-                
                 if i == 0: # VER
                     archivos = [f for f in os.listdir(ruta_cat) if not f.startswith('.')]
                     if not archivos: st.info("La carpeta está vacía.")
