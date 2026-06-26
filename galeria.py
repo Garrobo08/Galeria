@@ -23,6 +23,8 @@ def guardar_password(carpeta, password):
 # --- ESTADOS ---
 if "nivel" not in st.session_state: st.session_state.nivel = None
 if "acceso_carpeta" not in st.session_state: st.session_state.acceso_carpeta = None
+# Usamos una key maestra para resetear el formulario de creación
+if "reset_admin" not in st.session_state: st.session_state.reset_admin = 0
 if "uploader_key" not in st.session_state: st.session_state.uploader_key = 0
 
 def verificar_acceso():
@@ -47,18 +49,22 @@ selector = st.tabs(tabs)
 if st.session_state.nivel == 'admin':
     with selector[2]:
         st.subheader("Gestión de Carpetas")
-        nueva_cat = st.text_input("Nombre del evento:", key="new_cat_name")
-        new_pw = st.text_input("Contraseña para el evento:", type="password", key="new_cat_pw")
+        # Usamos una key dinámica para limpiar los inputs tras crear
+        nueva_cat = st.text_input("Nombre del evento:", key=f"new_cat_{st.session_state.reset_admin}")
+        new_pw = st.text_input("Contraseña para el evento:", type="password", key=f"new_pw_{st.session_state.reset_admin}")
+        
         if st.button("Crear Carpeta"):
             if nueva_cat and new_pw:
                 os.makedirs(os.path.join(CARPETA_BASE, nueva_cat), exist_ok=True)
                 guardar_password(nueva_cat, new_pw)
-                st.success(f"Carpeta '{nueva_cat}' creada.")
+                st.session_state.reset_admin += 1 # Esto cambia la key y limpia los inputs
+                st.success(f"✅ Carpeta '{nueva_cat}' creada con éxito.")
                 st.rerun()
 
         carpeta_borrar = st.selectbox("Borrar carpeta:", ["Selecciona una carpeta..."] + os.listdir(CARPETA_BASE))
         if carpeta_borrar != "Selecciona una carpeta..." and st.button("BORRAR"):
             shutil.rmtree(os.path.join(CARPETA_BASE, carpeta_borrar))
+            st.warning(f"🗑️ Carpeta '{carpeta_borrar}' eliminada.")
             st.rerun()
 
 # --- LÓGICA VER Y SUBIR ---
@@ -75,7 +81,7 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
                 if pw_input == passwords.get(sel_cat):
                     st.session_state.acceso_carpeta = sel_cat
                 else:
-                    st.error("Contraseña incorrecta.")
+                    st.error("❌ Contraseña incorrecta.")
                     st.session_state.acceso_carpeta = None
             
             if st.session_state.acceso_carpeta == sel_cat:
@@ -89,7 +95,7 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
                             with open(os.path.join(ruta_cat, f), "rb") as file:
                                 st.download_button("⬇️", file, f, key=f"dl_{tab_name}_{idx}")
                 else: # SUBIR
-                    creador = st.text_input("Tu nombre:", key="autor_input")
+                    creador = st.text_input("Tu nombre:", key=f"autor_{st.session_state.uploader_key}")
                     files = st.file_uploader("Fotos:", accept_multiple_files=True, key=f"up_{st.session_state.uploader_key}")
                     
                     if st.button("Confirmar subida"):
@@ -97,7 +103,6 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
                             for f in files:
                                 with open(os.path.join(ruta_cat, f"{creador}_{f.name}"), "wb") as dest:
                                     dest.write(f.getbuffer())
-                            st.success("Subido con éxito.")
-                            # Incrementar la key fuerza al uploader y al input a limpiarse
+                            st.success("✅ ¡Archivos subidos correctamente!")
                             st.session_state.uploader_key += 1
                             st.rerun()
