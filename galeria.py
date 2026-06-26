@@ -51,7 +51,6 @@ if st.session_state.nivel == 'admin':
         st.subheader("Gestión de Carpetas")
         nueva_cat = st.text_input("Nombre del evento:", key=f"new_cat_{st.session_state.reset_admin}")
         new_pw = st.text_input("Contraseña para el evento:", type="password", key=f"new_pw_{st.session_state.reset_admin}")
-        
         if st.button("Crear Carpeta"):
             if nueva_cat and new_pw:
                 os.makedirs(os.path.join(CARPETA_BASE, nueva_cat), exist_ok=True)
@@ -72,23 +71,30 @@ for i, tab_name in enumerate(["Ver", "Subir"]):
         sel_cat = st.selectbox(f"Elige evento:", cats, key=f"sel_{tab_name}")
         
         if sel_cat != "Selecciona una carpeta...":
-            # Usamos reset_pass para limpiar el input al acceder
-            pw_input = st.text_input(f"Contraseña para {sel_cat}:", type="password", key=f"pw_{tab_name}_{st.session_state.reset_pass}")
+            # Si cambiamos de carpeta, reseteamos el acceso
+            if st.session_state.acceso_carpeta != sel_cat:
+                st.session_state.acceso_carpeta = None
             
-            if st.button(f"Acceder a {sel_cat}", key=f"btn_acc_{tab_name}"):
-                passwords = cargar_passwords()
-                if pw_input == passwords.get(sel_cat):
-                    st.session_state.acceso_carpeta = sel_cat
-                    st.session_state.reset_pass += 1
-                    st.rerun()
-                else:
-                    st.error("❌ Contraseña incorrecta.")
-                    st.session_state.acceso_carpeta = None
+            # Solo mostramos el input de contraseña si no hemos accedido a esta carpeta
+            if st.session_state.acceso_carpeta != sel_cat:
+                pw_input = st.text_input(f"Contraseña para {sel_cat}:", type="password", key=f"pw_{tab_name}_{st.session_state.reset_pass}")
+                if st.button(f"Acceder a {sel_cat}", key=f"btn_acc_{tab_name}"):
+                    passwords = cargar_passwords()
+                    if pw_input == passwords.get(sel_cat):
+                        st.session_state.acceso_carpeta = sel_cat
+                        st.session_state.reset_pass += 1
+                        st.rerun()
+                    else:
+                        st.error("❌ Contraseña incorrecta.")
             
+            # --- CONTENIDO PROTEGIDO ---
             if st.session_state.acceso_carpeta == sel_cat:
+                st.success(f"✅ Acceso concedido a {sel_cat}")
                 ruta_cat = os.path.join(CARPETA_BASE, sel_cat)
+                
                 if i == 0: # VER
                     archivos = [f for f in os.listdir(ruta_cat) if not f.startswith('.')]
+                    if not archivos: st.info("La carpeta está vacía.")
                     cols = st.columns(3)
                     for idx, f in enumerate(archivos):
                         with cols[idx % 3]:
