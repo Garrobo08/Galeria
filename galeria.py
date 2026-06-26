@@ -22,8 +22,11 @@ def guardar_password(carpeta, password):
 
 # --- ESTADOS ---
 if "nivel" not in st.session_state: st.session_state.nivel = None
+# Usaremos estados específicos: "acceso_Ver" y "acceso_Subir"
+if "acceso_Ver" not in st.session_state: st.session_state.acceso_Ver = None
+if "acceso_Subir" not in st.session_state: st.session_state.acceso_Subir = None
+if "reset_admin" not in st.session_state: st.session_state.reset_admin = 0
 if "uploader_key" not in st.session_state: st.session_state.uploader_key = 0
-# Eliminamos "acceso_carpeta" del estado permanente
 
 def verificar_acceso():
     if st.session_state.nivel is None:
@@ -43,48 +46,75 @@ tabs = ["🖼️ Ver Galería", "📤 Subir Contenido"]
 if st.session_state.nivel == 'admin': tabs.append("⚙️ Admin")
 selector = st.tabs(tabs)
 
-# --- PESTAÑA ADMIN (No necesita cambios) ---
+# --- PESTAÑA ADMIN ---
 if st.session_state.nivel == 'admin':
     with selector[2]:
         st.subheader("Gestión de Carpetas")
-        nueva_cat = st.text_input("Nombre del evento:", key="new_cat_admin")
-        new_pw = st.text_input("Contraseña:", type="password", key="new_pw_admin")
+        nueva_cat = st.text_input("Nombre del evento:", key=f"new_cat_{st.session_state.reset_admin}")
+        new_pw = st.text_input("Contraseña para el evento:", type="password", key=f"new_pw_{st.session_state.reset_admin}")
         if st.button("Crear Carpeta"):
             if nueva_cat and new_pw:
                 os.makedirs(os.path.join(CARPETA_BASE, nueva_cat), exist_ok=True)
                 guardar_password(nueva_cat, new_pw)
-                st.success("✅ Carpeta creada.")
+                st.session_state.reset_admin += 1 
+                st.success(f"✅ Carpeta '{nueva_cat}' creada.")
                 st.rerun()
-        # ... (borrado igual)
 
-# --- LÓGICA VER Y SUBIR ---
+        carpeta_borrar = st.selectbox("Borrar carpeta:", ["Selecciona una carpeta..."] + os.listdir(CARPETA_BASE))
+        if carpeta_borrar != "Selecciona una carpeta..." and st.button("BORRAR CARPETA"):
+            shutil.rmtree(os.path.join(CARPETA_BASE, carpeta_borrar))
+            st.rerun()
+
+# --- LÓGICA VER Y SUBIR (Totalmente independientes) ---
 for i, tab_name in enumerate(["Ver", "Subir"]):
     with selector[i]:
         cats = ["Selecciona una carpeta..."] + [d for d in os.listdir(CARPETA_BASE) if os.path.isdir(os.path.join(CARPETA_BASE, d))]
         sel_cat = st.selectbox(f"Elige evento:", cats, key=f"sel_{tab_name}")
         
+        # Referencia al estado específico de este módulo
+        estado_acceso = f"acceso_{tab_name}"
+        
         if sel_cat != "Selecciona una carpeta...":
-            # Usamos un formulario temporal para la contraseña
-            pw_input = st.text_input(f"Introduce contraseña para {sel_cat}:", type="password", key=f"pw_input_{tab_name}")
+            # Si cambia la carpeta, reiniciamos el acceso de este módulo exclusivamente
+            if st.session_state.get(estado_acceso) != sel_cat:
+                st.session_state[estado_acceso] = None
             
-            # Solo si el usuario pulsa el botón se verifica
-            if st.button(f"Entrar a {sel_cat}", key=f"btn_check_{tab_name}"):
-                passwords = cargar_passwords()
-                if pw_input == passwords.get(sel_cat):
-                    st.session_state[f"acceso_{tab_name}"] = True # Acceso temporal
-                else:
-                    st.error("❌ Contraseña incorrecta.")
-                    st.session_state[f"acceso_{tab_name}"] = False
-
-            # Comprobamos acceso temporal
-            if st.session_state.get(f"acceso_{tab_name}"):
-                st.success("✅ Acceso concedido.")
+            # Pedir contraseña si no hay acceso activo en ESTE módulo
+            if st.session_state.get(estado_acceso) != sel_cat:
+                pw_input = st.text_input(f"Contraseña para {sel_cat}:", type="password", key=f"pw_{tab_name}")
+                if st.button(f"Acceder a {sel_cat}", key=f"btn_acc_{tab_name}"):
+                    passwords = cargar_passwords()
+                    if pw_input == passwords.get(sel_cat):
+                        st.session_state[estado_acceso] = sel_cat
+                        st.rerun()
+                    else:
+                        st.error("❌ Contraseña incorrecta.")
+            
+            # --- CONTENIDO PROTEGIDO ---
+            if st.session_state.get(estado_acceso) == sel_cat:
                 ruta_cat = os.path.join(CARPETA_BASE, sel_cat)
                 
-                # ... (Lógica de Ver / Subir igual que antes)
-            
-            # OPCIÓN PARA CERRAR CARPETA:
-            if st.session_state.get(f"acceso_{tab_name}"):
-                if st.button("🚪 Cerrar carpeta", key=f"close_{tab_name}"):
-                    st.session_state[f"acceso_{tab_name}"] = False
-                    st.rerun()
+                if i == 0: # VER
+                    archivos = [f for f in os.listdir(ruta_cat) if not f.startswith('.')]
+                    if not archivos: st.info("La carpeta está vacía.")
+                    cols = st.columns(3)
+                    for idx, f in enumerate(archivos):
+                        with cols[idx % 3]:
+                            st.image(os.path.join(ruta_cat, f), use_container_width=True)
+                            with open(os.path.join(ruta_cat, f), "rb") as file:
+                                st.download_button("⬇️", file, f, key=f"dl_{tab_name}_{idx}")
+                            if st.session_state.nivel == 'admin':
+                                if st.button("🗑️", key=f"del_{idx}"):
+                                    os.remove(os.path.join(ruta_cat, f))
+                                    st.rerun()
+                else: # SUBIR
+                    creador = st.text_input("Tu nombre:", key=f"autor_{st.session_state.uploader_key}")
+                    files = st.file_uploader("Fotos:", accept_multiple_files=True, key=f"up_{st.session_state.uploader_key}")
+                    if st.button("Confirmar subida"):
+                        if creador and files:
+                            for f in files:
+                                with open(os.path.join(ruta_cat, f"{creador}_{f.name}"), "wb") as dest:
+                                    dest.write(f.getbuffer())
+                            st.success("✅ ¡Subido!")
+                            st.session_state.uploader_key += 1
+                            st.rerun()
